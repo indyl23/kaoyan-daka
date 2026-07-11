@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>考研打卡器 · 南大085406</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+/* ===== 夏晨 Summer Morning ===== */
+:root {
+  --bg:        #EDF7F2;
+  --card:      #ffffff;
+  --text:      #0c221d;
+  --muted:     #4d7a6e;
+  --faint:     #b8d5cc;
+  --line:      #d4e8e1;
+  --sea:       #7FC7BD;
+  --sea-soft:  #e5f5f1;
+  --cyan:      #4CB6C2;
+  --cyan-soft: #e5f4f5;
+  --lime:      #95C92C;
+  --lime-soft: #e9f6d6;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "PingFang SC", -apple-system, "Microsoft YaHei", sans-serif;
+  font-weight: 400;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 32px 20px 60px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container { max-width: 680px; margin: 0 auto; }
+
+/* ---- Header ---- */
+.header {
+  padding: 0 0 18px 0;
+  margin-bottom: 28px;
+  border-bottom: 1px solid #B5E655;
+}
+.header .date-line {
+  font-size: 12px; color: var(--muted); margin-bottom: 6px;
+  letter-spacing: 0.6px;
+}
+.header .day-title {
+  font-size: 28px; font-weight: 300; letter-spacing: 1px;
+}
+.header .subtitle {
+  font-size: 13px; color: var(--muted); margin-top: 6px; font-weight: 300;
+}
+
+/* ---- Stats ---- */
+.stats { display: flex; gap: 0; margin-bottom: 32px; }
+.stat-card {
+  flex: 1;
+  padding: 12px 0;
+  text-align: left;
+  border-right: 1px solid var(--line);
+}
+.stat-card:last-child { border-right: none; }
+.stat-card .number {
+  font-size: 36px; font-weight: 300; color: var(--text);
+  font-variant-numeric: tabular-nums; letter-spacing: -1px;
+}
+.stat-card.streak .number { color: var(--cyan); font-weight: 400; }
+.stat-card .label {
+  font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 300;
+}
+
+/* ---- Progress ---- */
+.progress-wrap { margin-bottom: 24px; }
+.progress-wrap .progress-label {
+  display: flex; justify-content: space-between;
+  font-size: 11px; margin-bottom: 6px; color: var(--muted);
+  font-weight: 300; letter-spacing: 0.4px;
+}
+.progress-bar { height: 2px; background: var(--line); overflow: hidden; }
+.progress-bar .fill {
+  height: 100%;
+  background: var(--lime);
+  transition: width 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* ---- Task Sections ---- */
+.section {
+  background: var(--card);
+  padding: 24px 28px; margin-bottom: 12px;
+}
+.section .section-title {
+  font-size: 13px; font-weight: 500; color: var(--text);
+  margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: baseline; gap: 8px;
+  letter-spacing: 0.4px;
+}
+.section .section-title .icon { display: none; }
+.section .section-title .time-badge {
+  font-size: 11px; color: var(--muted); font-weight: 300;
+  margin-left: auto; letter-spacing: 0;
+}
+
+.task-item {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.task-item + .task-item { border-top: 1px solid var(--line); }
+.task-item:hover { background: #f4fbe8; margin: 0 -6px; padding: 8px 6px; border-radius: 2px; }
+.task-item .checkbox {
+  flex-shrink: 0; width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid var(--faint); margin-top: 3px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 10px; color: transparent;
+}
+.task-item.done .checkbox {
+  background: var(--sea); border-color: var(--sea); color: white;
+}
+.task-item .task-text { flex: 1; font-size: 14px; line-height: 1.6; font-weight: 300; }
+.task-item.done .task-text { color: var(--faint); text-decoration: line-through; }
+
+/* Tags */
+.tag {
+  flex-shrink: 0; font-size: 10px; padding: 0 6px;
+  font-weight: 400; letter-spacing: 0.3px;
+  color: var(--muted); border: 1px solid var(--line);
+}
+.tag-math     { color: #5b8a7a; border-color: #c8e0d6; }
+.tag-eng      { color: #6b8c28; border-color: #d8e8c0; }
+.tag-major    { color: #3d7a7a; border-color: #c4dedc; }
+.tag-politics { color: #3a7c89; border-color: #c4dde2; }
+.tag-must     { color: #c0604c; border-color: #f0d8d0; }
+
+/* ---- Survival Line ---- */
+.survival-line {
+  background: var(--cyan-soft);
+  padding: 18px 24px; margin-bottom: 16px;
+}
+.survival-line .survival-title {
+  font-size: 12px; font-weight: 500; color: var(--cyan);
+  margin-bottom: 10px; letter-spacing: 0.5px;
+}
+.survival-line .task-item .checkbox { border-color: #e6cebe; }
+.survival-line .task-item.done .checkbox { background: var(--cyan); border-color: var(--cyan); }
+
+/* ---- Rest Day ---- */
+.rest-day {
+  text-align: center; padding: 60px 20px; background: var(--card);
+}
+.rest-day .rest-icon { display: none; }
+.rest-day .rest-title {
+  font-size: 18px; font-weight: 300; color: var(--text);
+  margin-bottom: 12px; letter-spacing: 1px;
+}
+.rest-day .rest-sub { font-size: 13px; color: var(--muted); line-height: 2; font-weight: 300; }
+
+/* ---- Badge ---- */
+.imported-badge {
+  display: inline-block;
+  font-size: 10px; color: var(--lime); font-weight: 300;
+  margin-left: 8px; vertical-align: middle;
+}
+.imported-badge::before { content: '· '; }
+
+/* ---- Buttons ---- */
+.btn-row { display: flex; gap: 8px; margin-bottom: 20px; }
+.btn {
+  flex: 1; padding: 10px 0; border: 1px solid var(--faint); border-radius: 0;
+  font-size: 12px; font-weight: 400; cursor: pointer;
+  transition: all 0.2s; font-family: inherit;
+  letter-spacing: 0.5px; text-align: center;
+  background: var(--card); color: var(--text);
+}
+.btn-primary { background: var(--sea); color: white; border-color: var(--sea); }
+.btn-primary:hover { background: #4d8b7c; }
+.btn-outline:hover { border-color: var(--sea); color: var(--sea); }
+
+#fileInput { display: none; }
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--card); padding: 10px 20px;
+  font-size: 12px; font-weight: 300; letter-spacing: 0.5px;
+  opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
+}
+.toast.show { opacity: 1; }
+
+/* ---- Countdown + Quote ---- */
+.countdown-quote-card {
+  background: var(--card);
+  padding: 20px 28px; margin-bottom: 20px;
+  display: flex; align-items: baseline; gap: 24px;
+}
+.countdown { flex-shrink: 0; text-align: left; }
+.countdown .cd-number {
+  font-size: 48px; font-weight: 200; color: var(--sea);
+  line-height: 1; letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
+}
+.countdown .cd-label {
+  font-size: 11px; color: var(--muted); margin-top: 4px; font-weight: 300;
+}
+.daily-quote {
+  flex: 1; font-size: 13px; color: var(--muted); line-height: 1.8;
+  font-weight: 300; padding-top: 4px;
+}
+
+/* ---- Yesterday ---- */
+.yesterday-line {
+  font-size: 11px; color: var(--muted); text-align: center;
+  margin-bottom: 16px; font-weight: 300; letter-spacing: 0.3px;
+}
+
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="date-line" id="dateLine">--</div>
+    <div class="day-title" id="dayTitle">--</div>
+    <div class="subtitle" id="subtitle">--</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="number" id="todayCount">0</div>
+      <div class="label">今日进度</div>
+    </div>
+    <div class="stat-card streak">
+      <div class="number" id="streakCount">0</div>
+      <div class="label">连续打卡（天）</div>
+    </div>
+    <div class="stat-card">
+      <div class="number" id="weekDone">0</div>
+      <div class="label">本周已完成（天）</div>
+    </div>
+    <div class="stat-card">
+      <div class="number" id="totalDone">0</div>
+      <div class="label">累计完成（天）</div>
+    </div>
+  </div>
+
+  <div class="countdown-quote-card">
+    <div class="countdown">
+      <div class="cd-number" id="cdDays">--</div>
+      <div class="cd-label">暑假剩余天数</div>
+    </div>
+    <div class="daily-quote">
+      <span id="dailyQuote">加载中...</span>
+    </div>
+  </div>
+
+  <div class="yesterday-line" id="yesterdayLine"></div>
+
+  <div class="progress-wrap">
+    <div class="progress-label">
+      <span id="progressText">今日任务完成度</span>
+      <span id="progressPercent">0%</span>
+    </div>
+    <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">导入周计划</button>
+    <button class="btn btn-outline" onclick="exportData()">导出同步码</button>
+    <button class="btn btn-outline" onclick="importData()">导入同步码</button>
+  </div>
+  <div class="btn-row" style="margin-top:-10px;">
+    <button class="btn btn-outline" onclick="resetToday()" style="font-size:12px;padding:8px;">重置今日</button>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx" onchange="importPlan(this)">
+
+  <div id="contentArea"></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'kaoyan_tracker_v3';
+const PLAN_KEY = 'kaoyan_week_plan';
+
+// 默认模板（未导入周计划时使用）
+const DEFAULT_SLOTS = [
+  { id:'math', icon:'', title:'数学', time:'08:00-12:00', tag:'math', items:[
+    {text:'听基础课（按周计划指定章节）',tag:'math'},
+    {text:'做对应习题（《1800》/《660》基础篇）',tag:'math'},
+    {text:'错题标记与重做',tag:'math'},
+  ]},
+  { id:'major', icon:'', title:'专业课 / 英语阅读精读', time:'14:00-16:00', tag:'major', items:[
+    {text:'专业课：按周计划看教材/听课/做课后题',tag:'major'},
+    {text:'英语阅读精读（逐句翻译 + 生词清零）',tag:'eng'},
+  ]},
+  { id:'eng', icon:'', title:'英语长难句 / 单词巩固', time:'16:00-17:30', tag:'eng', items:[
+    {text:'分析长难句 1-2 句（田静公众号），手写翻译',tag:'eng'},
+    {text:'APP 背单词巩固',tag:'eng'},
+  ]},
+  { id:'math2', icon:'', title:'数学错题复盘 / 补漏', time:'19:00-20:00', tag:'math', items:[
+    {text:'白天未完成项补漏',tag:'math'},
+    {text:'错题复盘整理',tag:'math'},
+  ]},
+  { id:'politics', icon:'', title:'政治（仅马原）', time:'20:00-20:45', tag:'politics', items:[
+    {text:'徐涛强化课马原看课 + 《1000题》对应单选',tag:'politics'},
+  ]},
+];
+
+const SURVIVAL_ITEMS = [
+  {text:'数学：做 5 道计算题（无论多简单）',tag:'must'},
+  {text:'英语：APP 新背 60 个单词',tag:'must'},
+  {text:'英语：分析 1 句长难句',tag:'must'},
+];
+
+function getToday() { return new Date().toISOString().split('T')[0]; }
+function isSunday(d) { return (d||new Date()).getDay()===0; }
+
+function getWeekMonday() {
+  const d = new Date();
+  const diff = d.getDay()===0 ? -6 : 1 - d.getDay();
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().split('T')[0];
+}
+
+function getNextMonday() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day===0 ? 1 : 8-day;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().split('T')[0];
+}
+
+function formatDateCN(dateStr) {
+  const d = new Date(dateStr+'T00:00:00');
+  const names = ['周日','周一','周二','周三','周四','周五','周六'];
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 '+names[d.getDay()];
+}
+
+function todayDayKey() {
+  const keys = ['sun','mon','tue','wed','thu','fri','sat'];
+  return keys[new Date().getDay()];
+}
+
+// ======== 每日文案库 ========
+const QUOTES = [
+  '完成最低生存线，今天就算赢。其他都是加分项。',
+  '先忍过前5分钟，后面就顺了。最难的是翻开书那一下。',
+  '数学130分不是一天练成的，但今天这一小时不练，就永远练不成。',
+  '你不需要对得起任何人，你只需要对得起把手机放客厅、打开讲义的那个自己。',
+  '375分不是一座山，是每天打几个勾。今天打满勾了吗？',
+  '不要想"能不能考上"，只想"今天积分算对了没有"。把大事拆成小事。',
+  '暑假一天天的流逝，但只要你今天动了手，这一天就不是零。',
+  '南大机器人与自动化学院，38个名额。你今天做的这一道题，就是在往那38个里挤。',
+  '今天如果卡住了，别慌。卡住≠你不行，卡住=你在暴露漏洞，这是好事。',
+  '不要再纠结选哪个学校了——你已经锁定了。现在只需要做，不需要想。',
+  '报复性熬夜的根源是白天没掌控感。你今天打完卡，今晚就能理直气壮地睡。',
+  '不定积分拿手就算，微分方程拿到就解——这不是天赋，是练出来的肌肉记忆。',
+  '政治只配在低效时段，别让它抢了你数学的黄金时间。',
+  '一周六个学习日，一天休息日。节奏比冲刺重要一万倍。',
+  '专业课胡寿松前六章，经典控制+现代控制双线并进。7月中旬必须启动。',
+];
+
+// ======== 暑假倒计时 ========
+function getSummerDaysLeft() {
+  const today = new Date();
+  const summerEnd = new Date(2026, 7, 29); // Aug 29, 2026 回学校
+  const diff = Math.ceil((summerEnd - today) / (1000 * 60 * 60 * 24));
+  return Math.max(0, diff);
+}
+
+// ======== 每日文案 ========
+function getDailyQuote() {
+  const today = getToday();
+  // 用日期哈希选文案，保证同一天显示同一句
+  let hash = 0;
+  for (let i = 0; i < today.length; i++) hash = ((hash << 5) - hash + today.charCodeAt(i)) | 0;
+  return QUOTES[Math.abs(hash) % QUOTES.length];
+}
+
+// ======== 昨日回顾 ========
+function getYesterdaySummary() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const yesterday = d.toISOString().split('T')[0];
+  const data = loadData();
+  const yd = data[yesterday];
+  if (!yd) return null;
+  const restDay = d.getDay() === 0;
+  const c = countTasks(yd, restDay, loadWeekPlan());
+  return { done: c.done, total: c.total, restDay: restDay, date: yesterday };
+}
+
+// ======== 存储 ========
+function loadData() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY))||{}; } catch(e){ return {}; } }
+function saveData(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
+function loadWeekPlan() { try { return JSON.parse(localStorage.getItem(PLAN_KEY))||null; } catch(e){ return null; } }
+function saveWeekPlan(p) { localStorage.setItem(PLAN_KEY, JSON.stringify(p)); }
+
+// ======== 渲染 ========
+function render() {
+  const today = getToday();
+  const data = loadData();
+  const weekPlan = loadWeekPlan();
+  const restDay = isSunday();
+
+  if (!data[today]) {
+    data[today] = { tasks:{}, survival:{}, source: weekPlan?'imported':'default' };
+    saveData(data);
+  }
+  const todayData = data[today];
+
+  // Header
+  document.getElementById('dateLine').textContent = formatDateCN(today);
+  if (restDay) {
+    document.getElementById('dayTitle').textContent = '休息日';
+    document.getElementById('subtitle').textContent = '只做最低生存线，其余时间彻底休息';
+  } else {
+    document.getElementById('dayTitle').textContent = '今日任务';
+    var badge = todayData.source==='imported' ? ' <span class="imported-badge">周计划导入</span>' : ' （默认模板）';
+    document.getElementById('subtitle').innerHTML = '学6休1 · 周日休息' + badge;
+  }
+
+  // 倒计时 & 每日文案
+  document.getElementById('cdDays').textContent = getSummerDaysLeft();
+  document.getElementById('dailyQuote').textContent = getDailyQuote();
+
+  // 昨日回顾
+  var ySummary = getYesterdaySummary();
+  if (ySummary) {
+    var yText = ySummary.restDay
+      ? '昨天是休息日'
+      : (ySummary.done === ySummary.total && ySummary.total > 0
+        ? '昨天全部完成'
+        : '昨天完成 ' + ySummary.done + '/' + ySummary.total + ' 项');
+    document.getElementById('yesterdayLine').textContent = yText;
+  } else {
+    document.getElementById('yesterdayLine').textContent = '';
+  }
+
+  // Stats
+  var counts = countTasks(todayData, restDay, weekPlan);
+  var pct = counts.total===0 ? 0 : Math.round(counts.done/counts.total*100);
+  document.getElementById('todayCount').textContent = counts.done+'/'+counts.total;
+  document.getElementById('progressPercent').textContent = pct+'%';
+  document.getElementById('progressFill').style.width = pct+'%';
+  document.getElementById('streakCount').textContent = calcStreak(data);
+  document.getElementById('weekDone').textContent = calcWeekDone(data);
+  document.getElementById('totalDone').textContent = calcTotalDone(data);
+  document.getElementById('progressText').textContent =
+    (counts.done===counts.total && counts.total>0) ? '今日全部完成' : '今日任务完成度';
+
+  // Content
+  var area = document.getElementById('contentArea');
+  var html = '';
+
+  // 最低生存线（每天都显示）
+  html += renderSurvivalLine(todayData);
+
+  if (restDay) {
+    html += '<div class="rest-day"><div class="rest-title">今天是休息日</div><div class="rest-sub">完成最低生存线后，彻底放松<br>看电影、听音乐、好好吃顿饭<br><br>明天继续</div></div>';
+  } else {
+    var slots = getTodaySlots(weekPlan, todayData.source);
+    slots.forEach(function(slot, si) {
+      html += renderSlot(slot, todayData);
+    });
+  }
+
+  area.innerHTML = html;
+
+  // Bind clicks
+  document.querySelectorAll('.task-item').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var slotId = this.dataset.slot;
+      var taskIdx = parseInt(this.dataset.idx);
+      var isSurvival = this.dataset.survival==='true';
+      toggleTask(today, slotId, taskIdx, isSurvival);
+    });
+  });
+}
+
+function getTodaySlots(weekPlan, source) {
+  if (weekPlan && source==='imported') {
+    // 计划尚未生效（今天还没到计划起始周一）→ 显示默认模板
+    if (weekPlan.planStartMonday && getToday() < weekPlan.planStartMonday) {
+      return DEFAULT_SLOTS;
+    }
+    var dk = todayDayKey();
+    return (weekPlan.days && weekPlan.days[dk]) ? weekPlan.days[dk] : DEFAULT_SLOTS;
+  }
+  return DEFAULT_SLOTS;
+}
+
+function renderSurvivalLine(todayData) {
+  var html = '<div class="survival-line"><div class="survival-title">最低生存线（完成这些，今天就算赢）</div>';
+  SURVIVAL_ITEMS.forEach(function(item,i) {
+    var done = todayData.survival && todayData.survival[i];
+    html += '<div class="task-item'+(done?' done':'')+'" data-slot="survival" data-idx="'+i+'" data-survival="true"><div class="checkbox">✓</div><div class="task-text">'+item.text+'</div><span class="tag tag-must">最低线</span></div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderSlot(slot, todayData) {
+  var html = '<div class="section"><div class="section-title">'+slot.title+'<span class="time-badge">'+slot.time+'</span></div>';
+
+  slot.items.forEach(function(item,i) {
+    var taskKey = slot.id+'_'+i;
+    var done = todayData.tasks && todayData.tasks[taskKey];
+    var tagLabel = item.tag==='math'?'数学':item.tag==='eng'?'英语':item.tag==='major'?'专业课':item.tag==='politics'?'政治':'';
+    var tagHtml = tagLabel ? '<span class="tag tag-'+item.tag+'">'+tagLabel+'</span>' : '';
+    html += '<div class="task-item'+(done?' done':'')+'" data-slot="'+slot.id+'" data-idx="'+i+'" data-survival="false"><div class="checkbox">✓</div><div class="task-text">'+item.text+'</div>'+tagHtml+'</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+function countTasks(todayData, restDay, weekPlan) {
+  var total = SURVIVAL_ITEMS.length, done = 0;
+  SURVIVAL_ITEMS.forEach(function(_,i) { if (todayData.survival&&todayData.survival[i]) done++; });
+
+  if (!restDay) {
+    var slots = getTodaySlots(weekPlan, todayData.source);
+    slots.forEach(function(slot) {
+      slot.items.forEach(function(_,i) {
+        total++;
+        if (todayData.tasks&&todayData.tasks[slot.id+'_'+i]) done++;
+      });
+    });
+  }
+  return {total:total, done:done};
+}
+
+function calcStreak(data) {
+  var streak = 0;
+  var d = new Date();
+  for (var i=0; i<365; i++) {
+    var ds = d.toISOString().split('T')[0];
+    var dayData = data[ds];
+    if (!dayData) break;
+    var rd = (new Date(ds+'T00:00:00').getDay()===0);
+    var c = countTasks(dayData, rd, loadWeekPlan());
+    if (rd ? c.done>=SURVIVAL_ITEMS.length : c.done===c.total&&c.total>0) streak++;
+    else break;
+    d.setDate(d.getDate()-1);
+  }
+  return streak;
+}
+
+function calcWeekDone(data) {
+  var mon = getWeekMonday();
+  var cnt = 0;
+  for (var i=0; i<7; i++) {
+    var d = new Date(mon+'T00:00:00'); d.setDate(d.getDate()+i);
+    var ds = d.toISOString().split('T')[0];
+    var dd = data[ds];
+    if (!dd) continue;
+    var rd = d.getDay()===0;
+    var c = countTasks(dd, rd, loadWeekPlan());
+    if (rd ? c.done>=SURVIVAL_ITEMS.length : c.done===c.total&&c.total>0) cnt++;
+  }
+  return cnt;
+}
+
+function calcTotalDone(data) {
+  var cnt = 0;
+  for (var ds in data) {
+    var dd = data[ds];
+    var rd = (new Date(ds+'T00:00:00').getDay()===0);
+    var c = countTasks(dd, rd, loadWeekPlan());
+    if (rd ? c.done>=SURVIVAL_ITEMS.length : c.done===c.total&&c.total>0) cnt++;
+  }
+  return cnt;
+}
+
+// ======== 交互 ========
+function toggleTask(date, slotId, taskIdx, isSurvival) {
+  var data = loadData();
+  if (!data[date]) data[date] = {tasks:{},survival:{}};
+  if (isSurvival) {
+    if (!data[date].survival) data[date].survival = {};
+    data[date].survival[taskIdx] = !data[date].survival[taskIdx];
+  } else {
+    if (!data[date].tasks) data[date].tasks = {};
+    data[date].tasks[slotId+'_'+taskIdx] = !data[date].tasks[slotId+'_'+taskIdx];
+  }
+  saveData(data);
+
+  var counts = countTasks(data[getToday()], isSunday(), loadWeekPlan());
+  if (counts.done===counts.total && counts.total>0) showToast('太棒了，今日全部完成');
+  render();
+}
+
+function resetToday() {
+  if (!confirm('确定要重置今天的所有勾选吗？')) return;
+  var data = loadData();
+  var today = getToday();
+  data[today] = {tasks:{},survival:{},source:data[today]?data[today].source:'default'};
+  saveData(data);
+  render();
+  showToast('已重置，可以重新打卡');
+}
+
+// ======== 导入周计划（行为时间段，列为周一~周日） ========
+function importPlan(fileInput) {
+  var file = fileInput.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, {type:'array'});
+      var sheet = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+
+      if (rows.length < 2) { showToast('表格格式不对'); return; }
+
+      // 找表头行：B~H 列含"周一"~"周日"
+      var dayKeys = ['mon','tue','wed','thu','fri','sat','sun'];
+      var dayNames = ['周一','周二','周三','周四','周五','周六','周日'];
+      var headerIdx = 0;
+      for (var r = 0; r < Math.min(5, rows.length); r++) {
+        var row = rows[r];
+        var matchCount = 0;
+        for (var c = 1; c <= 7; c++) {
+          if (String(row[c]||'').match(/周/)) matchCount++;
+        }
+        if (matchCount >= 5) { headerIdx = r; break; }
+      }
+      var headers = rows[headerIdx];
+
+      // 映射：列索引 → dayKey
+      var colToDay = {};
+      for (var c = 1; c <= 7; c++) {
+        var h = String(headers[c]||'');
+        for (var d = 0; d < dayNames.length; d++) {
+          if (h.indexOf(dayNames[d]) !== -1) { colToDay[c] = dayKeys[d]; break; }
+        }
+      }
+      if (Object.keys(colToDay).length === 0) { showToast('未识别到周一~周日的列标题'); return; }
+
+      // 各关键词映射
+      var slotIcons = { '数学':'','专业课':'','英语':'','错题':'','复盘':'','政治':'' };
+      var slotTags = { '数学':'math','专业课':'major','英语':'eng','错题':'math','复盘':'math','政治':'politics' };
+      var slotTimes = { '数学':'08:00-12:00','专业课':'14:00-16:00','英语':'16:00-17:30','错题':'19:00-20:00','复盘':'19:00-20:00','政治':'20:00-20:45' };
+
+      // 初始化每天的空 slot 数组
+      var days = {};
+      for (var dk=0; dk<dayKeys.length; dk++) { days[dayKeys[dk]] = []; }
+
+      // 逐行解析（每行 = 一个时间段）
+      for (var r = headerIdx+1; r < rows.length; r++) {
+        var row = rows[r];
+        var firstCol = String(row[0]||'').trim();
+        if (!firstCol) continue;
+
+        // 从第一列提取 icon、tag、time、title
+        var icon='', tag='major', time='';
+        for (var kw in slotIcons) { if (firstCol.indexOf(kw)!==-1){ icon=slotIcons[kw]; break; } }
+        for (var kw in slotTags) { if (firstCol.indexOf(kw)!==-1){ tag=slotTags[kw]; break; } }
+        time = slotTimes[Object.keys(slotTimes).find(function(kw){return firstCol.indexOf(kw)!==-1;})]||'';
+        // 从文本提取时间范围
+        var timeMatch = firstCol.match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/);
+        if (timeMatch) time = timeMatch[1]+'-'+timeMatch[2];
+        // 清理标题
+        var title = firstCol.replace(/[\d:—\-（）()\n]/g,'').replace(/\s+/g,' ').trim();
+
+        if (!title) continue; // 跳过空行
+
+        // 对每一天读取该列任务
+        for (var colKey in colToDay) {
+          var col = parseInt(colKey);
+          var dayKey = colToDay[colKey];
+          var cellText = String(row[col]||'').trim();
+          var items = cellText
+            ? cellText.split('\n').filter(function(t){return t.trim();}).map(function(t){return {text:t.trim(),tag:tag};})
+            : [];
+          days[dayKey].push({
+            id: 'imp_'+dayKey+'_'+days[dayKey].length,
+            icon: icon, title: title, time: time, tag: tag, items: items
+          });
+        }
+      }
+
+      // 检查是否有内容
+      var hasContent = false;
+      for (var dk=0; dk<dayKeys.length; dk++) {
+        if (days[dayKeys[dk]].length > 0) { hasContent = true; break; }
+      }
+      if (!hasContent) { showToast('未识别到任何任务，请检查表格内容'); return; }
+
+      saveWeekPlan({ days: days, planStartMonday: getNextMonday(), importedAt: getToday() });
+
+      var data = loadData();
+      var today = getToday();
+      if (!data[today]) data[today] = {tasks:{},survival:{}};
+      data[today].source = 'imported';
+      saveData(data);
+
+      render();
+      showToast('周计划导入成功，已自动匹配今日任务');
+    } catch(err) {
+      console.error(err);
+      showToast('导入失败：'+err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  fileInput.value = '';
+}
+
+// ======== 跨设备同步 ========
+function exportData() {
+  var all = {
+    tasks: loadData(),
+    weekPlan: loadWeekPlan(),
+    exportedAt: new Date().toISOString()
+  };
+  var json = JSON.stringify(all);
+  // 压缩：用 base64 编码
+  var code = btoa(unescape(encodeURIComponent(json)));
+  // 复制到剪贴板
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(function() {
+      showToast('同步码已复制到剪贴板，粘贴到另一台设备即可');
+    }).catch(function() {
+      fallbackCopy(code);
+    });
+  } else {
+    fallbackCopy(code);
+  }
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.left='-9999px';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); showToast('同步码已复制'); }
+  catch(e) { showToast('复制失败，请手动复制：\n'+text.substring(0,80)+'...'); }
+  document.body.removeChild(ta);
+}
+
+function importData() {
+  var code = prompt('请粘贴同步码（在另一台设备上点击"导出同步码"获取）：');
+  if (!code || !code.trim()) return;
+  try {
+    var json = decodeURIComponent(escape(atob(code.trim())));
+    var all = JSON.parse(json);
+    if (!all.tasks) { showToast('同步码格式无效'); return; }
+
+    // 智能合并：保留两边都有的最新数据
+    var existingData = loadData();
+    var existingPlan = loadWeekPlan();
+    var newData = all.tasks;
+    var newPlan = all.weekPlan;
+
+    // 合并任务数据（保留每个日期中较新的）
+    var mergedData = {};
+    // 先把现有的放进去
+    for (var ds in existingData) { mergedData[ds] = existingData[ds]; }
+    // 用导入的覆盖/补充
+    for (var ds in newData) {
+      if (!mergedData[ds]) { mergedData[ds] = newData[ds]; }
+      else {
+        // 合并 tasks 和 survival：导入的数据优先级更高
+        var et = mergedData[ds];
+        var nt = newData[ds];
+        mergedData[ds] = {
+          tasks: Object.assign({}, et.tasks||{}, nt.tasks||{}),
+          survival: Object.assign({}, et.survival||{}, nt.survival||{}),
+          source: nt.source || et.source
+        };
+      }
+    }
+
+    saveData(mergedData);
+
+    // 周计划：用更新的
+    if (newPlan && (!existingPlan || newPlan.importedAt >= (existingPlan.importedAt||''))) {
+      saveWeekPlan(newPlan);
+    }
+
+    render();
+    showToast('数据同步完成');
+  } catch(e) {
+    console.error(e);
+    showToast('同步码格式无效，请重新导出');
+  }
+}
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');}, 2500);
+}
+
+// ======== 初始化 ========
+render();
+
+// 午夜自动刷新
+var now = new Date();
+var tomorrow = new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+setTimeout(function(){render();location.reload();}, tomorrow-now+1000);
+</script>
+</body>
+</html>
