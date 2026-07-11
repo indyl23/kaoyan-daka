@@ -711,15 +711,15 @@ function importPlan(fileInput) {
 
 // ======== 跨设备同步 ========
 function exportData() {
-  var all = {
-    tasks: loadData(),
-    weekPlan: loadWeekPlan(),
-    exportedAt: new Date().toISOString()
-  };
-  var json = JSON.stringify(all);
-  // 压缩：用 base64 编码
+  var raw = loadData();  // { "2026-07-13": {tasks:{...},survival:{...},source:"..."}, ... }
+  // 压缩 key：tasks→t, survival→s, source→c
+  var compact = {};
+  for (var ds in raw) {
+    var d = raw[ds];
+    compact[ds] = { t: d.tasks||{}, s: d.survival||{}, c: d.source||'default' };
+  }
+  var json = JSON.stringify(compact);
   var code = btoa(unescape(encodeURIComponent(json)));
-  // 复制到剪贴板
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(code).then(function() {
       showToast('同步码已复制到剪贴板，粘贴到另一台设备即可');
@@ -746,25 +746,31 @@ function importData() {
   try {
     var json = decodeURIComponent(escape(atob(code.trim())));
     var all = JSON.parse(json);
-    if (!all.tasks) { showToast('同步码格式无效'); return; }
 
-    // 智能合并：保留两边都有的最新数据
+    // 新格式（v4 compact）：纯打卡数据，key 为 t/s/c
+    // 旧格式（v3）：{ tasks:{...}, weekPlan:{...}, exportedAt:"..." }
+    var newRaw;
+    if (all.tasks) {
+      // 旧格式：直接取 tasks
+      newRaw = all.tasks;
+    } else {
+      // 新格式：t→tasks, s→survival, c→source
+      newRaw = {};
+      for (var ds in all) {
+        var d = all[ds];
+        if (d && typeof d.t !== 'undefined') {
+          newRaw[ds] = { tasks: d.t||{}, survival: d.s||{}, source: d.c||'default' };
+        }
+      }
+    }
+
     var existingData = loadData();
-    var existingPlan = loadWeekPlan();
-    var newData = all.tasks;
-    var newPlan = all.weekPlan;
-
-    // 合并任务数据（保留每个日期中较新的）
     var mergedData = {};
-    // 先把现有的放进去
     for (var ds in existingData) { mergedData[ds] = existingData[ds]; }
-    // 用导入的覆盖/补充
-    for (var ds in newData) {
-      if (!mergedData[ds]) { mergedData[ds] = newData[ds]; }
+    for (var ds in newRaw) {
+      if (!mergedData[ds]) { mergedData[ds] = newRaw[ds]; }
       else {
-        // 合并 tasks 和 survival：导入的数据优先级更高
-        var et = mergedData[ds];
-        var nt = newData[ds];
+        var et = mergedData[ds], nt = newRaw[ds];
         mergedData[ds] = {
           tasks: Object.assign({}, et.tasks||{}, nt.tasks||{}),
           survival: Object.assign({}, et.survival||{}, nt.survival||{}),
@@ -773,13 +779,15 @@ function importData() {
       }
     }
 
-    saveData(mergedData);
-
-    // 周计划：用更新的
-    if (newPlan && (!existingPlan || newPlan.importedAt >= (existingPlan.importedAt||''))) {
-      saveWeekPlan(newPlan);
+    // 旧格式可能有 weekPlan
+    if (all.weekPlan) {
+      var existingPlan = loadWeekPlan();
+      if (!existingPlan || all.exportedAt >= (existingPlan.importedAt||'')) {
+        saveWeekPlan(all.weekPlan);
+      }
     }
 
+    saveData(mergedData);
     render();
     showToast('数据同步完成');
   } catch(e) {
