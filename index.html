@@ -229,7 +229,7 @@ body {
   <div class="stats">
     <div class="stat-card">
       <div class="number" id="todayCount">0</div>
-      <div class="label">今日进度</div>
+      <div class="label">今日打卡</div>
     </div>
     <div class="stat-card streak">
       <div class="number" id="streakCount">0</div>
@@ -388,7 +388,7 @@ function getYesterdaySummary() {
   if (!yd) return null;
   const restDay = d.getDay() === 0;
   const c = countTasks(yd, restDay, loadWeekPlan());
-  return { done: c.done, total: c.total, restDay: restDay, date: yesterday };
+  return { done: c.done, total: c.total, survivalDone: c.survivalDone, survivalTotal: c.survivalTotal, restDay: restDay, date: yesterday };
 }
 
 // ======== 存储 ========
@@ -430,9 +430,9 @@ function render() {
   if (ySummary) {
     var yText = ySummary.restDay
       ? '昨天是休息日'
-      : (ySummary.done === ySummary.total && ySummary.total > 0
-        ? '昨天全部完成'
-        : '昨天完成 ' + ySummary.done + '/' + ySummary.total + ' 项');
+      : (ySummary.survivalDone >= ySummary.survivalTotal
+        ? '昨天已打卡 ✓'
+        : '昨天未完成生存线');
     document.getElementById('yesterdayLine').textContent = yText;
   } else {
     document.getElementById('yesterdayLine').textContent = '';
@@ -440,15 +440,31 @@ function render() {
 
   // Stats
   var counts = countTasks(todayData, restDay, weekPlan);
+  var survivalDone = counts.survivalDone || 0;
+  var survivalTotal = counts.survivalTotal || SURVIVAL_ITEMS.length;
+  var survivalComplete = survivalDone >= survivalTotal;
+  var allComplete = counts.done===counts.total && counts.total>0;
   var pct = counts.total===0 ? 0 : Math.round(counts.done/counts.total*100);
-  document.getElementById('todayCount').textContent = counts.done+'/'+counts.total;
+
+  // 今日打卡数：生存线完成显示 ✓，否则显示生存线进度
+  document.getElementById('todayCount').textContent = survivalComplete ? '✓' : survivalDone+'/'+survivalTotal;
+  if (survivalComplete) {
+    document.getElementById('todayCount').style.color = 'var(--sea)';
+    document.getElementById('todayCount').style.fontWeight = '400';
+  } else {
+    document.getElementById('todayCount').style.color = '';
+    document.getElementById('todayCount').style.fontWeight = '300';
+  }
+
   document.getElementById('progressPercent').textContent = pct+'%';
   document.getElementById('progressFill').style.width = pct+'%';
   document.getElementById('streakCount').textContent = calcStreak(data);
   document.getElementById('weekDone').textContent = calcWeekDone(data);
   document.getElementById('totalDone').textContent = calcTotalDone(data);
   document.getElementById('progressText').textContent =
-    (counts.done===counts.total && counts.total>0) ? '今日全部完成' : '今日任务完成度';
+    allComplete ? '今日全部完成 🎉' :
+    survivalComplete ? '最低生存线已完成 ✓' :
+    '今日任务完成度';
 
   // Content
   var area = document.getElementById('contentArea');
@@ -517,8 +533,9 @@ function renderSlot(slot, todayData) {
 }
 
 function countTasks(todayData, restDay, weekPlan) {
-  var total = SURVIVAL_ITEMS.length, done = 0;
-  SURVIVAL_ITEMS.forEach(function(_,i) { if (todayData.survival&&todayData.survival[i]) done++; });
+  var survivalTotal = SURVIVAL_ITEMS.length, survivalDone = 0;
+  SURVIVAL_ITEMS.forEach(function(_,i) { if (todayData.survival&&todayData.survival[i]) survivalDone++; });
+  var total = survivalTotal, done = survivalDone;
 
   if (!restDay) {
     var slots = getTodaySlots(weekPlan, todayData.source);
@@ -529,7 +546,7 @@ function countTasks(todayData, restDay, weekPlan) {
       });
     });
   }
-  return {total:total, done:done};
+  return {total:total, done:done, survivalDone:survivalDone, survivalTotal:survivalTotal};
 }
 
 function calcStreak(data) {
@@ -541,7 +558,7 @@ function calcStreak(data) {
     if (!dayData) break;
     var rd = (new Date(ds+'T00:00:00').getDay()===0);
     var c = countTasks(dayData, rd, loadWeekPlan());
-    if (rd ? c.done>=SURVIVAL_ITEMS.length : c.done===c.total&&c.total>0) streak++;
+    if (c.survivalDone >= SURVIVAL_ITEMS.length) streak++;
     else break;
     d.setDate(d.getDate()-1);
   }
@@ -558,7 +575,7 @@ function calcWeekDone(data) {
     if (!dd) continue;
     var rd = d.getDay()===0;
     var c = countTasks(dd, rd, loadWeekPlan());
-    if (rd ? c.done>=SURVIVAL_ITEMS.length : c.done===c.total&&c.total>0) cnt++;
+    if (c.survivalDone >= SURVIVAL_ITEMS.length) cnt++;
   }
   return cnt;
 }
@@ -569,7 +586,7 @@ function calcTotalDone(data) {
     var dd = data[ds];
     var rd = (new Date(ds+'T00:00:00').getDay()===0);
     var c = countTasks(dd, rd, loadWeekPlan());
-    if (rd ? c.done>=SURVIVAL_ITEMS.length : c.done===c.total&&c.total>0) cnt++;
+    if (c.survivalDone >= SURVIVAL_ITEMS.length) cnt++;
   }
   return cnt;
 }
@@ -578,6 +595,11 @@ function calcTotalDone(data) {
 function toggleTask(date, slotId, taskIdx, isSurvival) {
   var data = loadData();
   if (!data[date]) data[date] = {tasks:{},survival:{}};
+
+  // 记录切换前生存线是否已完成
+  var oldSurvivalDone = 0;
+  SURVIVAL_ITEMS.forEach(function(_,i) { if (data[date].survival&&data[date].survival[i]) oldSurvivalDone++; });
+
   if (isSurvival) {
     if (!data[date].survival) data[date].survival = {};
     data[date].survival[taskIdx] = !data[date].survival[taskIdx];
@@ -588,7 +610,12 @@ function toggleTask(date, slotId, taskIdx, isSurvival) {
   saveData(data);
 
   var counts = countTasks(data[getToday()], isSunday(), loadWeekPlan());
-  if (counts.done===counts.total && counts.total>0) showToast('太棒了，今日全部完成');
+  var justFinishedSurvival = (oldSurvivalDone < SURVIVAL_ITEMS.length && counts.survivalDone >= SURVIVAL_ITEMS.length);
+  if (counts.done===counts.total && counts.total>0) {
+    showToast('太棒了，今日全部完成 🎉');
+  } else if (justFinishedSurvival) {
+    showToast('最低生存线完成，今天已经赢了 ✓');
+  }
   render();
 }
 
