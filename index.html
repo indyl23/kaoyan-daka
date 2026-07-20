@@ -290,11 +290,11 @@ const DEFAULT_SLOTS = [
     {text:'做对应习题（《1800》/《660》基础篇）',tag:'math'},
     {text:'错题标记与重做',tag:'math'},
   ]},
-  { id:'major', icon:'', title:'专业课 / 英语阅读精读', time:'14:00-16:00', tag:'major', items:[
+  { id:'major', icon:'', title:'专业课', time:'13:30-16:30', tag:'major', items:[
     {text:'专业课：按周计划看教材/听课/做课后题',tag:'major'},
-    {text:'英语阅读精读（逐句翻译 + 生词清零）',tag:'eng'},
   ]},
-  { id:'eng', icon:'', title:'英语长难句 / 单词巩固', time:'16:00-17:30', tag:'eng', items:[
+  { id:'eng', icon:'', title:'英语长难句 / 精读', time:'16:30-18:00', tag:'eng', items:[
+    {text:'英语阅读精读（逐句翻译 + 生词清零）',tag:'eng'},
     {text:'分析长难句 1-2 句（田静公众号），手写翻译',tag:'eng'},
     {text:'APP 背单词巩固',tag:'eng'},
   ]},
@@ -717,7 +717,10 @@ function importPlan(fileInput) {
       }
       if (!hasContent) { showToast('未识别到任何任务，请检查表格内容'); return; }
 
-      saveWeekPlan({ days: days, planStartMonday: getNextMonday(), importedAt: getToday() });
+      // planStartMonday: 周日导入→明天；周一~周六导入→本周一（立即生效）
+      var todayDay = new Date().getDay();
+      var planMonday = todayDay === 0 ? getNextMonday() : getWeekMonday();
+      saveWeekPlan({ days: days, planStartMonday: planMonday, importedAt: getToday() });
 
       var data = loadData();
       var today = getToday();
